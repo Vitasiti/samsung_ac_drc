@@ -1,7 +1,17 @@
-import asyncio, pytest
+import asyncio, re, pytest
+
+# Placeholder standing in for a real module's DUID (its MAC plus a 0000 suffix).
+MOCK_DUID = "AABBCCDDEEFF0000"
 
 class MockDRC:
-    """Plain-TCP server that mimics the DRC line protocol (no TLS) for tests."""
+    """Plain-TCP server that mimics the DRC line protocol (no TLS) for tests.
+
+    Behaviour here is taken from probes against a real MIM-H02. In particular
+    the module REJECTS a DeviceState request that carries no usable DUID
+    (Status="Fail" ErrorCode="103") rather than volunteering its identity —
+    an earlier version of this mock answered those requests, which hid a bug
+    that made the integration unusable on real hardware.
+    """
     def __init__(self): self.token_after_power_on = None; self.state = {}; self._writers = []
     async def handle(self, reader, writer):
         self._writers.append(writer)
@@ -14,13 +24,22 @@ class MockDRC:
             if 'Type="AuthToken"' in s:
                 writer.write(b'<?xml?><Response Type="AuthToken" Status="Okay" '
                              b'StartFrom="2026-07-16/06:57:11"/>\r\n')
+            elif 'Type="DeviceList"' in s:
+                writer.write(f'<?xml?><Response Type="DeviceList" Status="Okay">'
+                             f'<DeviceList DeviceCount="1"><Device DUID="{MOCK_DUID}" '
+                             f'GroupID="AC" ModelID="AC" /></DeviceList></Response>\r\n'.encode())
             elif 'Type="DeviceState"' in s:
+                m = re.search(r'DUID="([^"]*)"', s)
+                if not (m and m.group(1)):
+                    writer.write(b'<?xml?><Response Status="Fail" Type="DeviceState" '
+                                 b'ErrorCode="103" />\r\n')
+                    await writer.drain()
+                    continue
                 attrs = "".join(f'<Attr ID="{k}" Type="RW" Value="{v}"/>' for k, v in self.state.items())
                 writer.write(f'<?xml?><Response Type="DeviceState" Status="Okay"><DeviceState>'
-                             f'<Device DUID="AABBCCDDEEFF" GroupID="AC" ModelID="AC">{attrs}'
+                             f'<Device DUID="{MOCK_DUID}" GroupID="AC" ModelID="AC">{attrs}'
                              f'</Device></DeviceState></Response>\r\n'.encode())
             elif 'Type="DeviceControl"' in s:
-                import re
                 m = re.search(r'CommandID="([^"]+)".*Value="([^"]*)"', s)
                 if m: self.state[m.group(1)] = m.group(2)
                 writer.write(b'<?xml?><Response Type="DeviceControl" Status="Okay"/>\r\n')

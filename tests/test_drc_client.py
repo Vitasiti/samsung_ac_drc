@@ -62,3 +62,39 @@ async def test_client_serialises_and_reconnects(mock_drc):
     await c.set_attr("AC_FUN_POWER", "Off")
     assert (await c.get_state())["AC_FUN_POWER"] == "Off"
     await c.close()
+
+
+async def test_discover_duid_when_module_rejects_empty_duid(mock_drc):
+    """The module answers an empty-DUID DeviceState with Status="Fail", so DUID
+    discovery must not rely on it volunteering its identity that way."""
+    import asyncio
+    from tests.conftest import MOCK_DUID
+    srv, host, port = mock_drc
+    async def connect():
+        return await asyncio.open_connection(host, port)
+    c = d.SamsungDrcClient(host, token="tok", _connect=connect)
+    assert await c.ensure_duid() == MOCK_DUID
+    await c.close()
+
+
+async def test_fail_response_is_not_treated_as_success():
+    """A rejection echoes the request type it is rejecting, so matching on the
+    type alone accepts a failure as success and silently yields empty data."""
+    import asyncio, pytest
+    reader = asyncio.StreamReader()
+    reader.feed_data(b'<?xml?><Response Status="Fail" Type="DeviceState" '
+                     b'ErrorCode="103" />\r\n')
+    proto = d.DrcProtocol(reader, None)
+    with pytest.raises(d.DrcError, match="rejected"):
+        await proto._read_until('Type="DeviceState"', 2)
+
+
+async def test_okay_response_still_returns_normally():
+    """The Fail guard must not reject legitimate responses."""
+    import asyncio
+    reader = asyncio.StreamReader()
+    reader.feed_data(b'<?xml?><Response Type="DeviceState" Status="Okay">'
+                     b'<Attr ID="AC_FUN_POWER" Value="On"/></Response>\r\n')
+    proto = d.DrcProtocol(reader, None)
+    line = await proto._read_until('Type="DeviceState"', 2)
+    assert d.parse_attrs(line) == {"AC_FUN_POWER": "On"}

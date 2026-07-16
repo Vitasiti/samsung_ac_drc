@@ -10,6 +10,7 @@ _ATTR_RE = re.compile(r'Attr ID="([^"]+)"[^>]*?Value="([^"]*)"')
 _TOKEN_RE = re.compile(r'Token="([^"]*)"')
 _DUID_RE = re.compile(r'Device DUID="([^"]+)"')
 GETTOKEN = b'<Request Type="GetToken" />' + TERM
+DEVICELIST = b'<Request Type="DeviceList" />' + TERM
 
 def default_cert_path() -> str:
     return os.path.join(os.path.dirname(__file__), "ac14k_m.pem")
@@ -67,7 +68,12 @@ class DrcProtocol:
         while asyncio.get_event_loop().time() < end:
             line = await _readline(self._r, timeout)
             _LOGGER.debug("proto: recv %r (want %r)", line[:200], needle)
-            if needle in line: return line
+            if needle in line:
+                # A rejection echoes the request type, so matching on the type
+                # alone accepts failures as successes and yields empty data.
+                if 'Status="Fail"' in line:
+                    raise DrcError(f"Module rejected the request: {line}")
+                return line
         _LOGGER.debug("proto: timed out after %ss waiting for %r", timeout, needle)
         raise asyncio.TimeoutError
 
@@ -93,10 +99,14 @@ class DrcProtocol:
         await self._read_until('Type="DeviceControl"', 6)
 
     async def discover_duid(self) -> str:
-        await self._send(build_state(""))
-        line = await self._read_until("DeviceState", 6)
+        # The module will not volunteer its DUID via a DeviceState request that
+        # carries no DUID -- it answers Status="Fail" ErrorCode="103". DeviceList
+        # takes no DUID and returns it.
+        await self._send(DEVICELIST)
+        line = await self._read_until('Type="DeviceList"', 6)
         m = _DUID_RE.search(line)
-        if not m: raise DrcError("Could not discover DUID")
+        if not m: raise DrcError(f"No DUID in DeviceList response: {line}")
+        _LOGGER.debug("proto: discovered DUID %s", m.group(1))
         return m.group(1)
 
     async def get_token(self, power_on_timeout: float = 120) -> str:
