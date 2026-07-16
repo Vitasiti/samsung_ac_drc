@@ -11,6 +11,7 @@ _TOKEN_RE = re.compile(r'Token="([^"]*)"')
 _DUID_RE = re.compile(r'Device DUID="([^"]+)"')
 GETTOKEN = b'<Request Type="GetToken" />' + TERM
 DEVICELIST = b'<Request Type="DeviceList" />' + TERM
+CLOSE_TIMEOUT = 5.0  # cap on waiting for a socket teardown to complete
 
 def default_cert_path() -> str:
     return os.path.join(os.path.dirname(__file__), "ac14k_m.pem")
@@ -142,7 +143,7 @@ class SamsungDrcClient:
                 reader, writer = await self._connect_override()
             else:
                 stage = "ssl-context"
-                ctx = self._ctx or build_ssl_context()
+                ctx = await self._get_ssl_context()
                 stage = "tcp+tls-connect"
                 _LOGGER.debug("open: connecting to %s:%s", self._host, self._port)
                 reader, writer = await asyncio.wait_for(
@@ -164,6 +165,19 @@ class SamsungDrcClient:
                 sys.version.split()[0], ssl.OPENSSL_VERSION)
             raise
 
+    async def _get_ssl_context(self):
+        """Build the SSL context off the event loop, once.
+
+        load_cert_chain reads the certificate from disk. Home Assistant detects
+        that as a blocking call inside the loop and warns on every connection,
+        so hand it to an executor. The result is cached: the cert never changes,
+        and rebuilding per connection would re-read it every time.
+        """
+        if self._ctx is None:
+            loop = asyncio.get_running_loop()
+            self._ctx = await loop.run_in_executor(None, build_ssl_context)
+        return self._ctx
+
     async def _ensure(self):
         if self._proto is None:
             await self._open()
@@ -182,10 +196,23 @@ class SamsungDrcClient:
         return None
 
     async def _drop(self):
-        if self._writer:
-            try: self._writer.close()
-            except Exception: pass
-        self._proto = self._reader = self._writer = None
+        # Clear state first: _drop runs on the failure path, so it must leave a
+        # usable object behind even if the teardown below hangs or raises.
+        writer, self._writer = self._writer, None
+        self._proto = self._reader = None
+        if writer is None:
+            return
+        try:
+            writer.close()
+            # close() only *schedules* the teardown. The module accepts a single
+            # client, so returning before the socket is really gone can lock out
+            # the very next connection -- including our own retry.
+            await asyncio.wait_for(writer.wait_closed(), CLOSE_TIMEOUT)
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            _LOGGER.debug("drop: teardown did not complete cleanly (%s: %s)",
+                          type(err).__name__, err)
 
     async def ensure_duid(self) -> str:
         if not self._duid:

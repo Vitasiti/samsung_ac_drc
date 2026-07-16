@@ -98,3 +98,70 @@ async def test_okay_response_still_returns_normally():
     proto = d.DrcProtocol(reader, None)
     line = await proto._read_until('Type="DeviceState"', 2)
     assert d.parse_attrs(line) == {"AC_FUN_POWER": "On"}
+
+
+async def test_drop_waits_for_the_connection_to_actually_close():
+    """The module allows one client, so a half-open connection left behind by a
+    failed attempt can lock out the next one. close() only *schedules* the
+    teardown, so _drop must await wait_closed() before returning."""
+    events = []
+
+    class FakeWriter:
+        def close(self): events.append("close")
+        async def wait_closed(self): events.append("wait_closed")
+
+    c = d.SamsungDrcClient("h")
+    c._writer = FakeWriter()
+    await c._drop()
+    assert events == ["close", "wait_closed"], (
+        f"_drop must close and then wait for it; got {events}")
+    assert c._writer is None and c._proto is None
+
+
+async def test_drop_survives_a_writer_that_hangs_on_close(monkeypatch):
+    """A wedged transport must not hang _drop forever -- it runs on the failure
+    path, so it cannot itself become a new failure mode."""
+    import asyncio
+    monkeypatch.setattr(d, "CLOSE_TIMEOUT", 0.05)
+
+    class HangingWriter:
+        def close(self): pass
+        async def wait_closed(self): await asyncio.sleep(3600)
+
+    c = d.SamsungDrcClient("h")
+    c._writer = HangingWriter()
+    await asyncio.wait_for(c._drop(), 5)   # must return despite the hang
+    assert c._writer is None
+
+
+async def test_ssl_context_is_not_built_on_the_event_loop(monkeypatch):
+    """load_cert_chain reads the cert from disk. Home Assistant detects that as
+    a blocking call inside the event loop and warns on every connection."""
+    import threading
+    loop_thread = threading.current_thread()
+    seen = {}
+
+    def spy(*a, **k):
+        seen["thread"] = threading.current_thread()
+        return object()
+
+    monkeypatch.setattr(d, "build_ssl_context", spy)
+    c = d.SamsungDrcClient("h")
+    await c._get_ssl_context()
+    assert seen["thread"] is not loop_thread, (
+        "build_ssl_context ran on the event loop thread")
+
+
+async def test_ssl_context_is_built_once_and_reused(monkeypatch):
+    """Rebuilding the context per connection re-reads the cert every time."""
+    calls = []
+
+    def spy(*a, **k):
+        calls.append(1)
+        return object()
+
+    monkeypatch.setattr(d, "build_ssl_context", spy)
+    c = d.SamsungDrcClient("h")
+    first = await c._get_ssl_context()
+    second = await c._get_ssl_context()
+    assert len(calls) == 1 and first is second
