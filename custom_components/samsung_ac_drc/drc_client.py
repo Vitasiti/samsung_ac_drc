@@ -98,3 +98,74 @@ class DrcProtocol:
         m = _TOKEN_RE.search(line)
         if not m: raise DrcError(f"No token in: {line}")
         return m.group(1)
+
+
+class SamsungDrcClient:
+    def __init__(self, host, token=None, duid=None, port=DEFAULT_PORT,
+                 ssl_context=None, _connect=None):
+        self._host, self._port, self._token, self._duid = host, port, token, duid
+        self._ctx = ssl_context
+        self._connect_override = _connect
+        self._proto: DrcProtocol | None = None
+        self._reader = self._writer = None
+        self._lock = asyncio.Lock()
+
+    async def _open(self):
+        if self._connect_override:
+            reader, writer = await self._connect_override()
+        else:
+            ctx = self._ctx or build_ssl_context()
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self._host, self._port, ssl=ctx,
+                                        server_hostname=self._host), 15)
+        self._reader, self._writer = reader, writer
+        self._proto = DrcProtocol(reader, writer)
+        await self._proto.read_greeting()
+        if self._token:
+            await self._proto.authenticate(self._token)
+
+    async def _ensure(self):
+        if self._proto is None:
+            await self._open()
+
+    async def _with_retry(self, coro_factory):
+        async with self._lock:
+            for attempt in (1, 2):
+                try:
+                    await self._ensure()
+                    return await coro_factory()
+                except (OSError, asyncio.IncompleteReadError, asyncio.TimeoutError, DrcError):
+                    await self._drop()
+                    if attempt == 2: raise
+        return None
+
+    async def _drop(self):
+        if self._writer:
+            try: self._writer.close()
+            except Exception: pass
+        self._proto = self._reader = self._writer = None
+
+    async def ensure_duid(self) -> str:
+        if not self._duid:
+            self._duid = await self._with_retry(lambda: self._proto.discover_duid())
+        return self._duid
+
+    async def get_state(self) -> dict[str, str]:
+        duid = await self.ensure_duid()
+        return await self._with_retry(lambda: self._proto.get_state(duid))
+
+    async def set_attr(self, attr: str, value: str) -> None:
+        duid = await self.ensure_duid()
+        await self._with_retry(lambda: self._proto.set_attr(duid, attr, value))
+
+    async def get_token(self, power_on_timeout: float = 120) -> str:
+        async with self._lock:
+            await self._open()  # no token yet
+            try:
+                return await self._proto.get_token(power_on_timeout)
+            finally:
+                await self._drop()
+
+    async def close(self):
+        async with self._lock:
+            await self._drop()

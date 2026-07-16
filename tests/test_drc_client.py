@@ -50,3 +50,15 @@ async def test_get_token(mock_drc):
     srv.token_after_power_on = "ABC-123"
     p = await _proto(host, port)
     assert await p.get_token(power_on_timeout=2) == "ABC-123"
+
+
+async def test_client_serialises_and_reconnects(mock_drc):
+    srv, host, port = mock_drc
+    srv.state = {"AC_FUN_POWER": "On"}
+    async def connect():
+        return await asyncio.open_connection(host, port)
+    c = d.SamsungDrcClient(host, token="t", duid="7825AD10BB57", _connect=connect)
+    assert (await c.get_state())["AC_FUN_POWER"] == "On"
+    await c.set_attr("AC_FUN_POWER", "Off")
+    assert (await c.get_state())["AC_FUN_POWER"] == "Off"
+    await c.close()
