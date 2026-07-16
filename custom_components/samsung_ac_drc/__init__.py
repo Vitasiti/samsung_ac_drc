@@ -7,10 +7,16 @@ without HA).
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
 PLATFORMS = ["climate"]
 
 
-async def async_setup_entry(hass, entry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SamsungDrcCoordinator
 
     coordinator = SamsungDrcCoordinator(hass, entry)
@@ -20,7 +26,7 @@ async def async_setup_entry(hass, entry) -> bool:
     return True
 
 
-async def async_unload_entry(hass, entry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.client.close()

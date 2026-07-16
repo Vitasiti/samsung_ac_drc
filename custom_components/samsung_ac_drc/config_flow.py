@@ -7,11 +7,12 @@ from .drc_client import SamsungDrcClient, AuthError, DrcError
 
 class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    def __init__(self): self._host = None; self._client = None
+    def __init__(self): self._host = None
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
             self._host = user_input[CONF_HOST]
+            self._async_abort_entries_match({CONF_HOST: self._host})
             return await self.async_step_token()
         return self.async_show_form(step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_HOST): str}))

@@ -13,7 +13,7 @@ class SamsungDrcCoordinator(DataUpdateCoordinator[dict]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         self.client = SamsungDrcClient(entry.data["host"], token=entry.data[CONF_TOKEN],
                                        duid=entry.data.get(CONF_DUID))
-        super().__init__(hass, _LOGGER, name=DOMAIN,
+        super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN,
                          update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL))
 
     async def _async_update_data(self) -> dict:

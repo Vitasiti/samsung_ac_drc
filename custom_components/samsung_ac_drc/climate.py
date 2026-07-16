@@ -15,8 +15,8 @@ _HA_TO_DRCMODE = {"heat": "Heat", "cool": "Cool", "heat_cool": "Auto", "dry": "D
 _DRCMODE_TO_HA = {"Heat": HVACMode.HEAT, "Cool": HVACMode.COOL, "Auto": HVACMode.HEAT_COOL,
                   "Dry": HVACMode.DRY, "Wind": HVACMode.FAN_ONLY}
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback):
-    add([SamsungDrcClimate(entry.runtime_data, entry)])
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    async_add_entities([SamsungDrcClimate(entry.runtime_data, entry)])
 
 class SamsungDrcClimate(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
@@ -76,5 +76,8 @@ class SamsungDrcClimate(CoordinatorEntity, ClimateEntity):
         await self.coordinator.client.set_attr("AC_FUN_WINDLEVEL", mappings.FAN_TO_DRC[fan_mode])
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_on(self): await self.async_set_hvac_mode(HVACMode.HEAT)
+    async def async_turn_on(self):
+        await self.coordinator.client.set_attr("AC_FUN_POWER", "On")
+        await self.coordinator.async_request_refresh()
+
     async def async_turn_off(self): await self.async_set_hvac_mode(HVACMode.OFF)
