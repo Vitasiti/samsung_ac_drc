@@ -117,7 +117,7 @@ class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="reauth_successful")
         self._abort_if_unique_id_configured()
         return self.async_create_entry(
-            title=f"Samsung AC ({self._host})",
+            title="Samsung AC",
             data={CONF_HOST: self._host, CONF_TOKEN: token, CONF_DUID: duid},
         )
 

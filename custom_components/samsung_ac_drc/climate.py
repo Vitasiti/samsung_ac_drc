@@ -38,8 +38,10 @@ class SamsungDrcClimate(CoordinatorEntity, ClimateEntity):
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_climate"
+        # No IP in the name: has_entity_name means this becomes the entity name
+        # too, and an address is neither stable nor meaningful to read.
         self._attr_device_info = {"identifiers": {(DOMAIN, entry.unique_id)},
-                                  "manufacturer": "Samsung", "name": f"Samsung AC ({entry.data['host']})",
+                                  "manufacturer": "Samsung", "name": "Samsung AC",
                                   "model": "DRC / 2878"}
 
     @property
