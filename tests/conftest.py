@@ -17,7 +17,7 @@ class MockDRC:
             elif 'Type="DeviceState"' in s:
                 attrs = "".join(f'<Attr ID="{k}" Type="RW" Value="{v}"/>' for k, v in self.state.items())
                 writer.write(f'<?xml?><Response Type="DeviceState" Status="Okay"><DeviceState>'
-                             f'<Device DUID="7825AD10BB57" GroupID="AC" ModelID="AC">{attrs}'
+                             f'<Device DUID="AABBCCDDEEFF" GroupID="AC" ModelID="AC">{attrs}'
                              f'</Device></DeviceState></Response>\r\n'.encode())
             elif 'Type="DeviceControl"' in s:
                 import re
