@@ -1,7 +1,7 @@
 [project]
 name = "samsung-ac-drc"
 version = "0.1.6"
-description = "Control Samsung DRC-1.00 / 2878 AC modules (MIM-H02 / HIH-M02)"
+description = "Control Samsung DRC-1.00 / 2878 AC modules (MIM-H02)"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = []

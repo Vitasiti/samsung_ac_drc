@@ -7,11 +7,9 @@ era.
 
 ## Which modules does this support?
 
-This targets the Samsung Wi-Fi kit sold as the **MIM-H02**, commonly mislabeled
-in listings, forum posts, and even on the module's own sticker as **HIH-M02**
-(the letters get transposed a lot — if you searched for either name, you're in
-the right place). It works with Samsung CAC (commercial split) and ducted units
-whose Wi-Fi module speaks this DRC dialect.
+This targets the Samsung Wi-Fi kit sold as the **MIM-H02**. It works with
+Samsung CAC (commercial split) and ducted units whose Wi-Fi module speaks this
+DRC dialect.
 
 There are a couple of existing open-source integrations in this space, but
 neither cleanly covers this module/dialect:
@@ -22,7 +20,7 @@ neither cleanly covers this module/dialect:
   actively maintained.
 
 This project is a from-scratch implementation specifically for the DRC-1.00 /
-port 2878 dialect spoken by the MIM-H02 / HIH-M02 module.
+port 2878 dialect spoken by the MIM-H02 module.
 
 ## How do I know if I have one of these modules?
 
