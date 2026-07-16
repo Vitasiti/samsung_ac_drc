@@ -51,9 +51,9 @@ class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except asyncio.CancelledError:
                 _LOGGER.warning("capture: step cancelled before completing")
                 raise
-            except Exception:  # noqa: BLE001 - diagnostic: surface anything _CONNECT_ERRORS misses
-                _LOGGER.exception("capture: unexpected exception escaped _CONNECT_ERRORS")
-                errors["base"] = "no_token"
+            except Exception:  # noqa: BLE001 - a config flow must not 500 the UI
+                _LOGGER.exception("capture: unexpected error capturing a token")
+                errors["base"] = "unknown"
             else:
                 return await self._validate_and_finish(token, errors, step="capture")
             finally:
@@ -91,16 +91,20 @@ class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except _CONNECT_ERRORS as err:
             _LOGGER.debug("validate: connect failed (%s: %s)", type(err).__name__, err)
             errors["base"] = "cannot_connect"
-        except Exception:  # noqa: BLE001 - diagnostic: surface anything _CONNECT_ERRORS misses
-            _LOGGER.exception("validate: unexpected exception escaped _CONNECT_ERRORS")
-            errors["base"] = "cannot_connect"
+        except Exception:  # noqa: BLE001 - a config flow must not 500 the UI
+            _LOGGER.exception("validate: unexpected error validating the token")
+            errors["base"] = "unknown"
         else:
             await client.close()  # close BEFORE _finish (reauth reload reconnects)
             return await self._finish(token, duid)
         finally:
             await client.close()
+        # Hand the token back as a suggested value, so a failed attempt does not
+        # make the user re-paste it to try again.
         schema = (
-            vol.Schema({vol.Required(CONF_TOKEN): str})
+            vol.Schema(
+                {vol.Required(CONF_TOKEN, description={"suggested_value": token}): str}
+            )
             if step == "paste"
             else vol.Schema({})
         )
