@@ -51,8 +51,17 @@ class MockDRC:
                                  f'Token="{self.token_after_power_on}"/>\r\n'.encode())
             await writer.drain()
 
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """pytest-homeassistant-custom-component will not load a custom component
+    without this."""
+    yield
+
+
 @pytest.fixture
-async def mock_drc():
+async def mock_drc(socket_enabled):
+    # socket_enabled: the HA test harness blocks real sockets by default, and
+    # this fixture serves the DRC protocol over a real loopback listener.
     srv = MockDRC()
     server = await asyncio.start_server(srv.handle, "127.0.0.1", 0)
     host, port = server.sockets[0].getsockname()[:2]

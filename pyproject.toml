@@ -7,7 +7,10 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+# pytest-homeassistant-custom-component pins a matching Home Assistant and the
+# pytest/pytest-asyncio versions it expects, so it needs a recent Python even
+# though the integration itself supports older ones.
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-homeassistant-custom-component"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

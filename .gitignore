@@ -4,7 +4,7 @@ docs/superpowers/
 token_result.txt
 __pycache__/
 *.pyc
-.venv/
+.venv*/
 venv*/
 .pytest_cache/
 *.egg-info/
