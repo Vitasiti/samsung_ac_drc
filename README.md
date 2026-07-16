@@ -156,6 +156,11 @@ Samsung's DRC protocol family by:
 Thank you to the authors and contributors of all three projects for figuring
 out and documenting this protocol.
 
+The bundled `ac14k_m.pem` client certificate is Samsung's own **public, shared**
+certificate — extracted from Samsung's Smart Air Conditioner app and used
+identically by every implementation of this protocol (including the projects
+above). It is not anyone's personal secret or credential.
+
 ## About the author / Hire me
 
 This integration was built and is maintained independently. If you need help

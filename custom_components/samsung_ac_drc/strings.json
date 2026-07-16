@@ -26,6 +26,14 @@
         "data": {
           "token": "Token"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Samsung AC",
+        "description": "The stored token for this AC was rejected — the unit's memory was likely reset (e.g. after a power loss). Capture a new token from the AC or paste one you already have.",
+        "menu_options": {
+          "capture": "Capture a new token from the AC",
+          "paste": "I already have a token"
+        }
       }
     },
     "error": {
@@ -34,7 +42,8 @@
       "cannot_connect": "Could not connect to the AC at this IP address. Check the address and that the device is powered on."
     },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "reauth_successful": "Re-authentication was successful."
     }
   }
 }

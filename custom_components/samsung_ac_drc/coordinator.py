@@ -3,9 +3,10 @@ from datetime import timedelta
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_TOKEN, CONF_DUID
-from .drc_client import SamsungDrcClient, DrcError
+from .drc_client import SamsungDrcClient, DrcError, AuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,5 +20,7 @@ class SamsungDrcCoordinator(DataUpdateCoordinator[dict]):
     async def _async_update_data(self) -> dict:
         try:
             return await self.client.get_state()
+        except AuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
         except DrcError as err:
             raise UpdateFailed(str(err)) from err

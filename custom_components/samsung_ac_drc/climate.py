@@ -1,5 +1,5 @@
 from __future__ import annotations
-from homeassistant.components.climate import (ClimateEntity, ClimateEntityFeature, HVACMode)
+from homeassistant.components.climate import (ClimateEntity, ClimateEntityFeature, HVACMode, HVACAction)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -14,6 +14,9 @@ HVAC_MODES = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.HEAT_COOL,
 _HA_TO_DRCMODE = {"heat": "Heat", "cool": "Cool", "heat_cool": "Auto", "dry": "Dry", "fan_only": "Wind"}
 _DRCMODE_TO_HA = {"Heat": HVACMode.HEAT, "Cool": HVACMode.COOL, "Auto": HVACMode.HEAT_COOL,
                   "Dry": HVACMode.DRY, "Wind": HVACMode.FAN_ONLY}
+_DRCMODE_TO_ACTION = {"Heat": HVACAction.HEATING, "Cool": HVACAction.COOLING,
+                      "Dry": HVACAction.DRYING, "Wind": HVACAction.FAN,
+                      "Auto": HVACAction.IDLE}
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     async_add_entities([SamsungDrcClimate(entry.runtime_data, entry)])
@@ -46,6 +49,12 @@ class SamsungDrcClimate(CoordinatorEntity, ClimateEntity):
     def hvac_mode(self):
         if self._attrs.get("AC_FUN_POWER") != "On": return HVACMode.OFF
         return _DRCMODE_TO_HA.get(self._attrs.get("AC_FUN_OPMODE"), HVACMode.HEAT)
+
+    @property
+    def hvac_action(self):
+        if self._attrs.get("AC_FUN_POWER") != "On":
+            return HVACAction.OFF
+        return _DRCMODE_TO_ACTION.get(self._attrs.get("AC_FUN_OPMODE"), HVACAction.IDLE)
 
     @property
     def current_temperature(self): return mappings.tempnow_to_c(self._attrs.get("AC_FUN_TEMPNOW", ""))

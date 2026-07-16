@@ -18,8 +18,11 @@ def parser():
 async def _run(ns):
     if ns.cmd == "capture-token":
         c = SamsungDrcClient(ns.host)
-        print("Turn the AC OFF, press Enter, then turn it ON within the window.")
-        tok = await c.get_token(power_on_timeout=ns.timeout); print("TOKEN:", tok); await c.close()
+        input("Turn the AC OFF, then press Enter. You will then have the timeout "
+              "window to turn the AC ON so it issues a token...")
+        tok = await c.get_token(power_on_timeout=ns.timeout)
+        print("TOKEN:", tok)
+        await c.close()
     else:
         c = SamsungDrcClient(ns.host, token=ns.token, duid=ns.duid)
         if ns.cmd == "state":
