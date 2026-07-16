@@ -17,6 +17,17 @@ def default_cert_path() -> str:
     return os.path.join(os.path.dirname(__file__), "ac14k_m.pem")
 
 def build_ssl_context(cert_path: str | None = None) -> ssl.SSLContext:
+    """Build the legacy mutual-TLS context this hardware requires.
+
+    From porech/pysamsung-dplug (MIT) -- see NOTICE. Every setting is forced by
+    the module, measured against a real MIM-H02: it speaks TLS 1.0 and nothing
+    else; its certificate is self-signed, 1024-bit, SHA-1 and regenerated at
+    every boot (so it can neither be validated nor pinned); and its DH
+    parameters are broken, so !DH is required or the handshake fails with
+    'bad dh value'.
+
+    Blocking (reads the cert from disk) -- call via _get_ssl_context().
+    """
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
