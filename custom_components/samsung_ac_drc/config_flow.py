@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import voluptuous as vol
 
@@ -10,6 +11,8 @@ from homeassistant.const import CONF_HOST
 
 from .const import DOMAIN, CONF_TOKEN, CONF_DUID
 from .drc_client import SamsungDrcClient, AuthError, DrcError
+
+_LOGGER = logging.getLogger(__name__)
 
 _CONNECT_ERRORS = (DrcError, OSError, asyncio.TimeoutError, asyncio.IncompleteReadError)
 
@@ -38,15 +41,26 @@ class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_capture(self, user_input=None):
         errors: dict[str, str] = {}
         if user_input is not None:
+            _LOGGER.debug("capture: submit received (host=%s)", self._host)
             client = SamsungDrcClient(self._host)
             try:
                 token = await client.get_token(power_on_timeout=40)
-            except _CONNECT_ERRORS:
+            except _CONNECT_ERRORS as err:
+                _LOGGER.debug("capture: no token (%s: %s)", type(err).__name__, err)
+                errors["base"] = "no_token"
+            except asyncio.CancelledError:
+                _LOGGER.warning("capture: step cancelled before completing")
+                raise
+            except Exception:  # noqa: BLE001 - diagnostic: surface anything _CONNECT_ERRORS misses
+                _LOGGER.exception("capture: unexpected exception escaped _CONNECT_ERRORS")
                 errors["base"] = "no_token"
             else:
                 return await self._validate_and_finish(token, errors, step="capture")
             finally:
                 await client.close()
+        else:
+            _LOGGER.debug("capture: rendering form (no user_input)")
+        _LOGGER.debug("capture: showing form, errors=%s", errors)
         return self.async_show_form(
             step_id="capture", errors=errors, data_schema=vol.Schema({})
         )
@@ -66,13 +80,19 @@ class SamsungDrcConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _validate_and_finish(self, token, errors, step):
         """Validate the token and discover the DUID on a SINGLE connection, then
         close it before creating/reloading the entry (the module allows one client)."""
+        _LOGGER.debug("validate: connecting to %s to verify token", self._host)
         client = SamsungDrcClient(self._host, token=token)
         try:
             await client.get_state()  # validates authentication
             duid = await client.ensure_duid()  # cached; reuses the same connection
-        except AuthError:
+        except AuthError as err:
+            _LOGGER.debug("validate: token rejected (%s)", err)
             errors["base"] = "auth"
-        except _CONNECT_ERRORS:
+        except _CONNECT_ERRORS as err:
+            _LOGGER.debug("validate: connect failed (%s: %s)", type(err).__name__, err)
+            errors["base"] = "cannot_connect"
+        except Exception:  # noqa: BLE001 - diagnostic: surface anything _CONNECT_ERRORS misses
+            _LOGGER.exception("validate: unexpected exception escaped _CONNECT_ERRORS")
             errors["base"] = "cannot_connect"
         else:
             await client.close()  # close BEFORE _finish (reauth reload reconnects)

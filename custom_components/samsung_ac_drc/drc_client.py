@@ -1,6 +1,8 @@
 """Standalone async client for Samsung DRC-1.00 / 2878 AC modules. No HA imports."""
 from __future__ import annotations
-import asyncio, os, re, ssl, time
+import asyncio, logging, os, re, ssl, time
+
+_LOGGER = logging.getLogger(__name__)
 
 TERM = b"\r\n"
 DEFAULT_PORT = 2878
@@ -19,6 +21,7 @@ def build_ssl_context(cert_path: str | None = None) -> ssl.SSLContext:
     ctx.minimum_version = ssl.TLSVersion.TLSv1
     ctx.set_ciphers("HIGH:!DH:!aNULL:@SECLEVEL=0")
     ctx.load_cert_chain(cert_path or default_cert_path())
+    _LOGGER.debug("ssl: context built (openssl=%s)", ssl.OPENSSL_VERSION)
     return ctx
 
 def parse_attrs(xml: str) -> dict[str, str]:
@@ -48,6 +51,7 @@ class DrcProtocol:
 
     async def read_greeting(self) -> None:
         greet = await _readline(self._r)
+        _LOGGER.debug("proto: greeting %r", greet)
         if "DRC-1.00" not in greet:
             raise DrcError(f"Unexpected greeting: {greet!r}")
         # InvalidateAccount line (best-effort)
@@ -55,19 +59,23 @@ class DrcProtocol:
         except asyncio.TimeoutError: pass
 
     async def _send(self, data: bytes) -> None:
+        _LOGGER.debug("proto: send %r", data)
         self._w.write(data); await self._w.drain()
 
     async def _read_until(self, needle: str, timeout: float) -> str:
         end = asyncio.get_event_loop().time() + timeout
         while asyncio.get_event_loop().time() < end:
             line = await _readline(self._r, timeout)
+            _LOGGER.debug("proto: recv %r (want %r)", line[:200], needle)
             if needle in line: return line
+        _LOGGER.debug("proto: timed out after %ss waiting for %r", timeout, needle)
         raise asyncio.TimeoutError
 
     async def authenticate(self, token: str) -> None:
         await self._send(build_auth(token))
         for _ in range(4):
             line = await _readline(self._r, 6)
+            _LOGGER.debug("proto: auth recv %r", line[:200])
             if 'Type="AuthToken"' in line and 'Status="Okay"' in line: return
             if 'Status="Fail"' in line and "Auth" in line:
                 raise AuthError(f"Token rejected: {line}")
@@ -94,9 +102,12 @@ class DrcProtocol:
     async def get_token(self, power_on_timeout: float = 120) -> str:
         await self._send(GETTOKEN)
         await self._read_until('Type="GetToken"', 6)  # Status="Ready"
+        _LOGGER.debug("proto: module ready, waiting up to %ss for power-on token",
+                      power_on_timeout)
         line = await self._read_until("Token=", power_on_timeout)
         m = _TOKEN_RE.search(line)
         if not m: raise DrcError(f"No token in: {line}")
+        _LOGGER.debug("proto: token received")
         return m.group(1)
 
 
@@ -114,15 +125,19 @@ class SamsungDrcClient:
         if self._connect_override:
             reader, writer = await self._connect_override()
         else:
+            _LOGGER.debug("open: building SSL context")
             ctx = self._ctx or build_ssl_context()
+            _LOGGER.debug("open: connecting to %s:%s", self._host, self._port)
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self._host, self._port, ssl=ctx,
                                         server_hostname=self._host), 15)
+            _LOGGER.debug("open: TLS handshake complete")
         self._reader, self._writer = reader, writer
         self._proto = DrcProtocol(reader, writer)
         await self._proto.read_greeting()
         if self._token:
             await self._proto.authenticate(self._token)
+            _LOGGER.debug("open: authenticated")
 
     async def _ensure(self):
         if self._proto is None:
@@ -134,7 +149,9 @@ class SamsungDrcClient:
                 try:
                     await self._ensure()
                     return await coro_factory()
-                except (OSError, asyncio.IncompleteReadError, asyncio.TimeoutError, DrcError):
+                except (OSError, asyncio.IncompleteReadError, asyncio.TimeoutError, DrcError) as err:
+                    _LOGGER.debug("retry: attempt %s failed (%s: %s)",
+                                  attempt, type(err).__name__, err)
                     await self._drop()
                     if attempt == 2: raise
         return None
