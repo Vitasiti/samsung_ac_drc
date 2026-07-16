@@ -1,12 +1,12 @@
 {
   "domain": "samsung_ac_drc",
   "name": "Samsung AC (DRC / 2878)",
-  "version": "0.1.0",
+  "codeowners": ["@vitasiti"],
   "config_flow": true,
-  "iot_class": "local_polling",
+  "dependencies": [],
   "documentation": "https://github.com/vitasiti/samsung_ac_drc",
+  "iot_class": "local_polling",
   "issue_tracker": "https://github.com/vitasiti/samsung_ac_drc/issues",
   "requirements": [],
-  "dependencies": [],
-  "codeowners": ["@vitasiti"]
+  "version": "0.1.0"
 }
