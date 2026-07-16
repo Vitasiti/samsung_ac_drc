@@ -17,7 +17,10 @@ jobs:
           # which needs a recent Python regardless of what the integration itself
           # supports.
           python-version: "3.13"
-      - run: pip install -e ".[dev]"
+      # Deliberately not an editable install: it registers an import hook that
+      # Home Assistant's loader cannot resolve, and pytest's pythonpath setting
+      # already puts custom_components on the path.
+      - run: pip install pytest-homeassistant-custom-component
       - run: pytest -q
 
   hassfest:
