@@ -1,6 +1,6 @@
 """Standalone async client for Samsung DRC-1.00 / 2878 AC modules. No HA imports."""
 from __future__ import annotations
-import asyncio, logging, os, re, ssl, time
+import asyncio, logging, os, re, ssl, sys, time
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,9 +128,21 @@ class SamsungDrcClient:
             _LOGGER.debug("open: building SSL context")
             ctx = self._ctx or build_ssl_context()
             _LOGGER.debug("open: connecting to %s:%s", self._host, self._port)
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self._host, self._port, ssl=ctx,
-                                        server_hostname=self._host), 15)
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port, ssl=ctx,
+                                            server_hostname=self._host), 15)
+            except Exception as err:
+                # Logged at warning: a failed connection is actionable, and the
+                # environment matters — this module only speaks TLSv1, which
+                # modern OpenSSL builds reject by default.
+                _LOGGER.warning(
+                    "open: connection to %s:%s failed (%s: %s) "
+                    "[python=%s, openssl=%s, tls_min=%s]",
+                    self._host, self._port, type(err).__name__, err,
+                    sys.version.split()[0], ssl.OPENSSL_VERSION,
+                    getattr(ctx, "minimum_version", "?"))
+                raise
             _LOGGER.debug("open: TLS handshake complete")
         self._reader, self._writer = reader, writer
         self._proto = DrcProtocol(reader, writer)
