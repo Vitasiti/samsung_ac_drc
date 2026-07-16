@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "config_flow": true,
   "iot_class": "local_polling",
-  "documentation": "https://github.com/markoskeir/samsung_ac_drc",
-  "issue_tracker": "https://github.com/markoskeir/samsung_ac_drc/issues",
+  "documentation": "https://github.com/vitasiti/samsung_ac_drc",
+  "issue_tracker": "https://github.com/vitasiti/samsung_ac_drc/issues",
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@markoskeir"]
+  "codeowners": ["@vitasiti"]
 }

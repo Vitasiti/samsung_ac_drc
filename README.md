@@ -62,7 +62,7 @@ This repository is not (yet) in the default HACS store, so add it as a
 
 1. In Home Assistant, open **HACS**.
 2. Go to the three-dot menu → **Custom repositories**.
-3. Add repository URL: `https://github.com/markoskeir/samsung_ac_drc`
+3. Add repository URL: `https://github.com/vitasiti/samsung_ac_drc`
 4. Category: **Integration**.
 5. Find "Samsung AC (DRC / 2878)" in HACS and install it.
 6. **Restart Home Assistant.**
