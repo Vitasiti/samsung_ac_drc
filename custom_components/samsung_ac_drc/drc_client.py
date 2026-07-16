@@ -122,34 +122,37 @@ class SamsungDrcClient:
         self._lock = asyncio.Lock()
 
     async def _open(self):
-        if self._connect_override:
-            reader, writer = await self._connect_override()
-        else:
-            _LOGGER.debug("open: building SSL context")
-            ctx = self._ctx or build_ssl_context()
-            _LOGGER.debug("open: connecting to %s:%s", self._host, self._port)
-            try:
+        # `stage` names which step failed: the module accepts a TCP/TLS session
+        # and only then goes quiet if another client already holds it, so
+        # "connect" succeeding tells you much less than "greeting" failing.
+        stage = "start"
+        try:
+            if self._connect_override:
+                stage = "connect (injected)"
+                reader, writer = await self._connect_override()
+            else:
+                stage = "ssl-context"
+                ctx = self._ctx or build_ssl_context()
+                stage = "tcp+tls-connect"
+                _LOGGER.debug("open: connecting to %s:%s", self._host, self._port)
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(self._host, self._port, ssl=ctx,
                                             server_hostname=self._host), 15)
-            except Exception as err:
-                # Logged at warning: a failed connection is actionable, and the
-                # environment matters — this module only speaks TLSv1, which
-                # modern OpenSSL builds reject by default.
-                _LOGGER.warning(
-                    "open: connection to %s:%s failed (%s: %s) "
-                    "[python=%s, openssl=%s, tls_min=%s]",
-                    self._host, self._port, type(err).__name__, err,
-                    sys.version.split()[0], ssl.OPENSSL_VERSION,
-                    getattr(ctx, "minimum_version", "?"))
-                raise
-            _LOGGER.debug("open: TLS handshake complete")
-        self._reader, self._writer = reader, writer
-        self._proto = DrcProtocol(reader, writer)
-        await self._proto.read_greeting()
-        if self._token:
-            await self._proto.authenticate(self._token)
-            _LOGGER.debug("open: authenticated")
+                _LOGGER.debug("open: TLS handshake complete")
+            self._reader, self._writer = reader, writer
+            self._proto = DrcProtocol(reader, writer)
+            stage = "greeting"
+            await self._proto.read_greeting()
+            if self._token:
+                stage = "authenticate"
+                await self._proto.authenticate(self._token)
+                _LOGGER.debug("open: authenticated")
+        except Exception as err:
+            _LOGGER.warning(
+                "open: %s:%s failed during '%s' (%s: %s) [python=%s, openssl=%s]",
+                self._host, self._port, stage, type(err).__name__, err,
+                sys.version.split()[0], ssl.OPENSSL_VERSION)
+            raise
 
     async def _ensure(self):
         if self._proto is None:
