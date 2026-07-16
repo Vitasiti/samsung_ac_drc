@@ -1,0 +1,5 @@
+DOMAIN = "samsung_ac_drc"
+DEFAULT_PORT = 2878
+DEFAULT_SCAN_INTERVAL = 30
+CONF_TOKEN = "token"
+CONF_DUID = "duid"

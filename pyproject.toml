@@ -1,0 +1,13 @@
+[project]
+name = "samsung-ac-drc"
+version = "0.1.0"
+description = "Control Samsung DRC-1.00 / 2878 AC modules (MIM-H02 / HIH-M02)"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

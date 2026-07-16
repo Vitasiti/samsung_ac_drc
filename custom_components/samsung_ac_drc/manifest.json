@@ -1,0 +1,12 @@
+{
+  "domain": "samsung_ac_drc",
+  "name": "Samsung AC (DRC / 2878)",
+  "version": "0.1.0",
+  "config_flow": true,
+  "iot_class": "local_push",
+  "documentation": "https://github.com/markoskeir/samsung_ac_drc",
+  "issue_tracker": "https://github.com/markoskeir/samsung_ac_drc/issues",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": []
+}
