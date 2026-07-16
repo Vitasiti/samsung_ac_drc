@@ -33,3 +33,68 @@ def build_state(duid: str) -> bytes:
 def build_control(duid: str, attr: str, value: str) -> bytes:
     return (f'<Request Type="DeviceControl"><Control CommandID="{attr}" DUID="{duid}">'
             f'<Attr ID="{attr}" Value="{value}"/></Control></Request>').encode() + TERM
+
+
+class DrcError(Exception): ...
+class AuthError(DrcError): ...
+
+async def _readline(reader: asyncio.StreamReader, timeout: float = 5.0) -> str:
+    data = await asyncio.wait_for(reader.readuntil(TERM), timeout)
+    return data.decode("utf-8", "replace").strip()
+
+class DrcProtocol:
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        self._r, self._w = reader, writer
+
+    async def read_greeting(self) -> None:
+        greet = await _readline(self._r)
+        if "DRC-1.00" not in greet:
+            raise DrcError(f"Unexpected greeting: {greet!r}")
+        # InvalidateAccount line (best-effort)
+        try: await _readline(self._r, 3)
+        except asyncio.TimeoutError: pass
+
+    async def _send(self, data: bytes) -> None:
+        self._w.write(data); await self._w.drain()
+
+    async def _read_until(self, needle: str, timeout: float) -> str:
+        end = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < end:
+            line = await _readline(self._r, timeout)
+            if needle in line: return line
+        raise asyncio.TimeoutError
+
+    async def authenticate(self, token: str) -> None:
+        await self._send(build_auth(token))
+        for _ in range(4):
+            line = await _readline(self._r, 6)
+            if 'Type="AuthToken"' in line and 'Status="Okay"' in line: return
+            if 'Status="Fail"' in line and "Auth" in line:
+                raise AuthError(f"Token rejected: {line}")
+        raise AuthError("No AuthToken Okay received")
+
+    async def get_state(self, duid: str) -> dict[str, str]:
+        await self._send(build_state(duid))
+        line = await self._read_until('Type="DeviceState"', 6)
+        return parse_attrs(line)
+
+    async def set_attr(self, duid: str, attr: str, value: str) -> None:
+        await self._send(build_control(duid, attr, value))
+        # Wait for the device to acknowledge the control command so callers
+        # can rely on the write having landed before this returns.
+        await self._read_until('Type="DeviceControl"', 6)
+
+    async def discover_duid(self) -> str:
+        await self._send(build_state(""))
+        line = await self._read_until("DeviceState", 6)
+        m = _DUID_RE.search(line)
+        if not m: raise DrcError("Could not discover DUID")
+        return m.group(1)
+
+    async def get_token(self, power_on_timeout: float = 120) -> str:
+        await self._send(GETTOKEN)
+        await self._read_until('Type="GetToken"', 6)  # Status="Ready"
+        line = await self._read_until("Token=", power_on_timeout)
+        m = _TOKEN_RE.search(line)
+        if not m: raise DrcError(f"No token in: {line}")
+        return m.group(1)
