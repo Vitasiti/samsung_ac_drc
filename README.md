@@ -1,4 +1,4 @@
-# Samsung AC DRC (MIM-H02 / HIH-M02)
+# Samsung AC DRC MIM-H02
 
 A Home Assistant integration and standalone Python library/CLI for older Samsung
 air conditioner Wi-Fi modules that speak the **DRC-1.00 protocol over TCP port
